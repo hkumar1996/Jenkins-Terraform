@@ -1,58 +1,66 @@
 pipeline {
-    
-    environment {
-        AWS_ACCOUNT_ID="050752638621"
-        AWS_DEFAULT_REGION="ap-south-1"
-        }
-    parameters{
-        booleanParam(name: 'autoApprove', defaultValue: false, description: 'Automatically run apply after generating plan?')
-    }    
-    
-        
-        
     agent any
+
+    environment {
+        AWS_ACCOUNT_ID = "050752638621"
+        AWS_DEFAULT_REGION = "ap-south-1"
+    }
+
+    parameters {
+        booleanParam(name: 'autoApprove', defaultValue: false, description: 'Automatically run apply after generating plan?')
+    }
+
     stages {
-        stage('checkout'){
-            steps{
-                script{
-                    dir("terraform"){
-                        git "https://github.com/hkumar1996/Jenkins-Terraform.git"
+        stage('Checkout') {
+            steps {
+                script {
+                    dir("terraform") {
+                        git url: "https://github.com/hkumar1996/Jenkins-Terraform.git", branch: "main"
                     }
                 }
-               } 
             }
         }
-        stage('Plan'){
-            steps{
-                sh 'pwd;cd terraform/ ; terraform init'
-                sh 'pwd;cd terraform/ ; terraform plan -out tfplan'
-                sh 'pwd;cd terraform/ ; terraform show -no-color tfplan > tfplan.txt'
+
+        stage('Plan') {
+            steps {
+                dir("terraform") {
+                    sh 'terraform init'
+                    sh 'terraform plan -out tfplan'
+                    sh 'terraform show -no-color tfplan > tfplan.txt'
+                }
             }
-        }    
-       
-        stage('Approval'){
-            when{
+        }
+
+        stage('Approval') {
+            when {
                 not {
                     equals expected: true, actual: params.autoApprove
                 }
             }
-               
-            steps{
-                script{
+            steps {
+                script {
                     def plan = readFile 'terraform/tfplan.txt'
-                    input message: "Do you want to apply the plan?"
-                    parameters: [text(name: 'Plan', description: 'Preview review the plan', defaultValue: plan)]
+                    input message: "Do you want to apply the plan?", 
+                          parameters: [text(name: 'Plan', description: 'Please review the plan', defaultValue: plan)]
                 }
-             }
-        }
-        
-        stage('Apply'){
-            steps{
-                sh "pwd;cd terraform/ ;terraform apply -input-false tfplan"
             }
         }
-    
-}
 
-   
-   
+        stage('Apply') {
+            steps {
+                dir("terraform") {
+                    sh 'terraform apply -input=false tfplan'
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Terraform apply completed successfully!'
+        }
+        failure {
+            echo 'Terraform apply failed. Check the logs for details.'
+        }
+    }
+}
